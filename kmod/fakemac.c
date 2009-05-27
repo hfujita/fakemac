@@ -4,6 +4,7 @@
 #include <linux/rculist.h>
 #include <linux/hash.h>
 #include <linux/etherdevice.h>
+#include <linux/notifier.h>
 
 #include <net/neighbour.h>
 
@@ -294,9 +295,35 @@ out_del_store:
 	return err;
 }
 
+static void __remove_netdev(struct fakemac_ops_store *st)
+{
+	resume_netdev_ops(st);
+	unregister_sysctl_table(st->sysctl_header);
+	kfree(st->dev_name);
+
+	st->sysctl_header = NULL;
+	st->dev_name = NULL;
+
+	del_store(st);
+}
+
+static int remove_netdev(struct net_device *dev)
+{
+	struct fakemac_ops_store *st = find_store(dev);
+
+	if (st == NULL)
+		return -ENODEV;
+
+	__remove_netdev(st);
+
+	return 0;
+}
+
 static void remove_all_netdev(void)
 {
 	int i;
+
+	rtnl_lock();
 
 	rcu_read_lock();
 
@@ -308,25 +335,63 @@ static void remove_all_netdev(void)
 			       rcu_dereference(head->next),
 			       struct fakemac_ops_store, list),
 		       &ops->list != head) {
-			resume_netdev_ops(ops);
-			unregister_sysctl_table(ops->sysctl_header);
-			kfree(ops->dev_name);
-
-			ops->sysctl_header = NULL;
-			ops->dev_name = NULL;
-
-			del_store(ops);
+			__remove_netdev(ops);
 		}
 	}
 
 	rcu_read_unlock();
+
+	rtnl_unlock();
 }
+
+static int fakemac_netdev_event(struct notifier_block *this,
+				unsigned long event,
+				void *ptr)
+{
+	struct net_device *dev = ptr;
+	int err;
+
+	ASSERT_RTNL();
+
+	switch (event) {
+	case NETDEV_REGISTER:
+		dprintk(KERN_INFO "fakemac_netdev_event: "
+			"netdev registered\n");
+		err = add_netdev(dev_net(dev), dev);
+		if (err)
+			return notifier_from_errno(err);
+
+		break;
+
+	case NETDEV_UNREGISTER:
+		dprintk(KERN_INFO "fakemac_netdev_event: "
+			"netdev unregistered\n");
+		remove_netdev(dev);
+		break;
+
+	case NETDEV_CHANGENAME:
+		remove_netdev(dev);
+		err = add_netdev(dev_net(dev), dev);
+		if (err)
+			return notifier_from_errno(err);
+		break;
+
+	default:
+		dprintk(KERN_INFO "fakemac_netdev_event: "
+			"unhandled event: %04lx\n", event);
+		break;
+	}
+
+	return NOTIFY_DONE;
+}
+
+static struct notifier_block fakemac_netdev_notifier = {
+	.notifier_call = fakemac_netdev_event,
+};
 
 static int __init fakemac_init(void)
 {
 	int i;
-	struct net *net = &init_net;
-	struct net_device *dev;
 	int ret = 0;
 
 	store_cachep = kmem_cache_create(
@@ -346,17 +411,14 @@ static int __init fakemac_init(void)
 		return -ENOMEM;
 	}
 
-	rtnl_lock();
-	for_each_netdev(net, dev) {
-		int err = add_netdev(net, dev);
-		if (err) {
-			remove_all_netdev();
-			ret = err;
-			break;
-		}
-	}
-	rtnl_unlock();
+	ret = register_netdevice_notifier(&fakemac_netdev_notifier);
+	if (ret)
+		goto out_cleancachep;
 
+	return 0;
+
+out_cleancachep:
+	kmem_cache_destroy(store_cachep);
 	return ret;
 }
 
@@ -367,6 +429,8 @@ static void fakemac_exit(void)
 	  Wait for a while in order to ensure that all ethdevops_stores
 	  have been deleted.
 	*/
+
+	unregister_netdevice_notifier(&fakemac_netdev_notifier);
 
 	remove_all_netdev();
 
