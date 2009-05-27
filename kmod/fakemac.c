@@ -243,7 +243,7 @@ static int fakemac_proc_handler(struct ctl_table *ctl, int write,
  * See __devinet_sysctl_register for details
  */
 
-static int add_netdev(struct net *net, struct net_device *dev)
+static int fakemac_register_netdev(struct net *net, struct net_device *dev)
 {
 	int err;
 	struct fakemac_ops_store *ops;
@@ -253,7 +253,7 @@ static int add_netdev(struct net *net, struct net_device *dev)
 		{},
 	};
 
-	dprintk(KERN_INFO "add_netdev: adding %s...\n",
+	dprintk(KERN_INFO "fakemac_register_netdev: adding %s...\n",
 		dev->name);
 
 	err = add_store(dev, &ops);
@@ -274,7 +274,7 @@ static int add_netdev(struct net *net, struct net_device *dev)
 	ops->sysctl_table[0].proc_handler = fakemac_proc_handler;
 	ops->sysctl_table[0].procname     = ops->dev_name;
 	ops->sysctl_table[0].extra1       = ops;
-	
+
 	ops->sysctl_header =
 		register_net_sysctl_table(net, ctl_path, ops->sysctl_table);
 	if (ops->sysctl_header == NULL) {
@@ -282,7 +282,7 @@ static int add_netdev(struct net *net, struct net_device *dev)
 		goto free_name;
 	}
 
-	dprintk(KERN_INFO "add_netdev: added successfully: %s\n",
+	dprintk(KERN_INFO "fakemac_register_netdev: added successfully: %s\n",
 		ops->dev_name);
 
 	return 0;
@@ -295,7 +295,7 @@ out_del_store:
 	return err;
 }
 
-static void __remove_netdev(struct fakemac_ops_store *st)
+static void __unregister_netdev(struct fakemac_ops_store *st)
 {
 	resume_netdev_ops(st);
 	unregister_sysctl_table(st->sysctl_header);
@@ -307,19 +307,19 @@ static void __remove_netdev(struct fakemac_ops_store *st)
 	del_store(st);
 }
 
-static int remove_netdev(struct net_device *dev)
+static int fakemac_unregister_netdev(struct net_device *dev)
 {
 	struct fakemac_ops_store *st = find_store(dev);
 
 	if (st == NULL)
 		return -ENODEV;
 
-	__remove_netdev(st);
+	__unregister_netdev(st);
 
 	return 0;
 }
 
-static void remove_all_netdev(void)
+static void fakemac_unregister_all_netdev(void)
 {
 	int i;
 
@@ -335,7 +335,7 @@ static void remove_all_netdev(void)
 			       rcu_dereference(head->next),
 			       struct fakemac_ops_store, list),
 		       &ops->list != head) {
-			__remove_netdev(ops);
+			__unregister_netdev(ops);
 		}
 	}
 
@@ -357,7 +357,7 @@ static int fakemac_netdev_event(struct notifier_block *this,
 	case NETDEV_REGISTER:
 		dprintk(KERN_INFO "fakemac_netdev_event: "
 			"netdev registered\n");
-		err = add_netdev(dev_net(dev), dev);
+		err = fakemac_register_netdev(dev_net(dev), dev);
 		if (err)
 			return notifier_from_errno(err);
 
@@ -366,12 +366,12 @@ static int fakemac_netdev_event(struct notifier_block *this,
 	case NETDEV_UNREGISTER:
 		dprintk(KERN_INFO "fakemac_netdev_event: "
 			"netdev unregistered\n");
-		remove_netdev(dev);
+		fakemac_unregister_netdev(dev);
 		break;
 
 	case NETDEV_CHANGENAME:
-		remove_netdev(dev);
-		err = add_netdev(dev_net(dev), dev);
+		fakemac_unregister_netdev(dev);
+		err = fakemac_register_netdev(dev_net(dev), dev);
 		if (err)
 			return notifier_from_errno(err);
 		break;
@@ -432,7 +432,7 @@ static void fakemac_exit(void)
 
 	unregister_netdevice_notifier(&fakemac_netdev_notifier);
 
-	remove_all_netdev();
+	fakemac_unregister_all_netdev();
 
 	synchronize_net();
 
