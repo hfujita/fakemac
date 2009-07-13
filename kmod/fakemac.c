@@ -88,10 +88,10 @@ static int add_store(struct net_device *dev, struct fakemac_ops_store **re)
 	}
 
 	e->dev      = dev;
-	e->ops      = *dev->header_ops;
 	e->orig_ops = dev->header_ops;
 	e->enabled  = 0;
 	e->count    = 1;
+	memset(&e->ops, 0, sizeof(e->ops));
 
 	list_add_rcu(&e->list, &ethdevops_stores[hash]);
 
@@ -198,10 +198,18 @@ static void inject_netdev_ops(struct fakemac_ops_store *store)
 		printk(":%02x", store->fakeaddr[i]);
 	printk("\n");
 
-	store->ops = *store->orig_ops;
-	store->ops.create  = fake_eth_header;
-	store->ops.rebuild = fake_eth_rebuild_header;
-	store->ops.cache   = fake_eth_header_cache;
+	/*
+	  Some network device (e.g. tun) leaves header_ops NULL.
+	 */
+	if (store->orig_ops) {
+		store->ops = *store->orig_ops;
+		if (store->orig_ops->create)
+			store->ops.create  = fake_eth_header;
+		if (store->orig_ops->rebuild)
+			store->ops.rebuild = fake_eth_rebuild_header;
+		if (store->orig_ops->cache)
+			store->ops.cache   = fake_eth_header_cache;
+	}
 
 	/* TODO: atomic exchange */
 	store->dev->header_ops = &store->ops;
