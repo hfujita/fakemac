@@ -1,0 +1,43 @@
+fakemac - make your switch "dumb" hub
+
+Author: Hajime Fujita <hfujita@cc.u-tokyo.ac.jp>
+
+[ Introduction ]
+
+This tool hides the real MAC address of your NIC to prevent switch
+from learning your address.  When a switch does not have an entry in
+its MAC address table, it broadcast a frame to the whole collision
+domain (i.e. "flooding" mode).  This is sometimes useful when you are
+constructing single IP address cluster based on broadcast-based
+mechanism.
+
+[ Build ]
+
+To build a module, type
+# cd kmod
+# make
+
+If you want to build a module for a kernel other than currently
+running on your machine, use KERNELDIR variable to specify the
+location of your target kernel.  # make KERNELDIR=/path/to/your/kernel
+
+[ Usage ]
+
+To use fakemac, first load the module.
+# insmod fakemac.ko
+
+After the successful loading of the module, you'll see several files
+under the /proc/sys/net/fakemac directory.
+
+If you want to hide the read MAC address of eth0, type the following command:
+# echo 1 > /proc/sys/net/fakemac/eth0
+
+As you may imagine, you can disable fakemac by doing this:
+# echo 0 > /proc/sys/net/fakemac/eth0
+
+By default, fakemac is disabled for all network interfaces.
+
+[ Acknowledgment ]
+
+The idea of this tool comes from a document from Microsoft Windows Server,
+http://www.microsoft.com/technet/prodtechnol/windows2000serv/deploy/confeat/nlbovw.mspx
