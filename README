@@ -29,7 +29,7 @@ To use fakemac, first load the module.
 After the successful loading of the module, you'll see several files
 under the /proc/sys/net/fakemac directory.
 
-If you want to hide the read MAC address of eth0, type the following command:
+If you want to hide the real MAC address of eth0, type the following command:
 # echo 1 > /proc/sys/net/fakemac/eth0
 
 As you may imagine, you can disable fakemac by doing this:
