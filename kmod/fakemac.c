@@ -243,6 +243,9 @@ static int fakemac_proc_handler(struct ctl_table *ctl, int write,
 	struct fakemac_ops_store *st
 		= (struct fakemac_ops_store *) ctl->extra1;
 
+	if (ret != 0)
+		goto out;
+
 	newval =  *(int *)(ctl->data);
 
 	if (write && newval != oldval) {
@@ -251,7 +254,7 @@ static int fakemac_proc_handler(struct ctl_table *ctl, int write,
 		else
 			resume_netdev_ops(st);
 	}
-
+out:
 	return ret;
 }
 
