@@ -1,4 +1,5 @@
 #include <linux/kernel.h>
+#include <linux/version.h>
 #include <linux/if_ether.h>
 #include <linux/rcupdate.h>
 #include <linux/rculist.h>
@@ -225,12 +226,20 @@ static void resume_netdev_ops(struct fakemac_ops_store *e)
 }
 
 static int fakemac_proc_handler(struct ctl_table *ctl, int write,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,32)
+				void __user *buffer,
+#else
 				struct file *filp, void __user *buffer,
+#endif
 				size_t *lenp, loff_t *ppos)
 {
 	int oldval = *(int *)(ctl->data);
 	int newval;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,32)
+	int ret = proc_dointvec(ctl, write, buffer, lenp, ppos);
+#else
 	int ret = proc_dointvec(ctl, write, filp, buffer, lenp, ppos);
+#endif
 	struct fakemac_ops_store *st
 		= (struct fakemac_ops_store *) ctl->extra1;
 
@@ -258,7 +267,7 @@ static int fakemac_register_netdev(struct net *net, struct net_device *dev)
 	struct ctl_path ctl_path[] = {
 		{ .procname = "net", .ctl_name = CTL_NET, },
 		{ .procname = "fakemac", .ctl_name = CTL_UNNUMBERED, },
-		{ .procname = 0, .ctl_name = 0 }
+		{ .procname = NULL, .ctl_name = 0 }
 	};
 
 	dprintk(KERN_INFO "fakemac_register_netdev: adding %s...\n",
