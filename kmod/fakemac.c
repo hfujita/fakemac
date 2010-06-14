@@ -258,7 +258,7 @@ static int fakemac_register_netdev(struct net *net, struct net_device *dev)
 	struct ctl_path ctl_path[] = {
 		{ .procname = "net", .ctl_name = CTL_NET, },
 		{ .procname = "fakemac", .ctl_name = CTL_UNNUMBERED, },
-		{},
+		{ .procname = 0, .ctl_name = 0 }
 	};
 
 	dprintk(KERN_INFO "fakemac_register_netdev: adding %s...\n",
