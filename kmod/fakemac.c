@@ -190,6 +190,7 @@ static int fake_eth_header_cache(const struct neighbour *neigh,
 static void inject_netdev_ops(struct fakemac_ops_store *store)
 {
 	int i;
+	const struct header_ops *ops;
 
 	random_ether_addr(store->fakeaddr);
 
@@ -212,17 +213,19 @@ static void inject_netdev_ops(struct fakemac_ops_store *store)
 			store->ops.cache   = fake_eth_header_cache;
 	}
 
-	/* TODO: atomic exchange */
-	store->dev->header_ops = &store->ops;
+	ops = &store->ops;
+	ops = xchg(&store->dev->header_ops, ops);
 }
 
 static void resume_netdev_ops(struct fakemac_ops_store *e)
 {
+	const struct header_ops *ops;
+
 	dprintk(KERN_INFO "fakemac: resuming ops for %s\n",
 		e->dev_name);
 
-	/* TODO: atomic exchange */
-	e->dev->header_ops = e->orig_ops;
+	ops = e->orig_ops;
+	ops = xchg(&e->dev->header_ops, ops);
 }
 
 static int fakemac_proc_handler(struct ctl_table *ctl, int write,
