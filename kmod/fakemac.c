@@ -266,14 +266,22 @@ out:
  * See __devinet_sysctl_register for details
  */
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,33)
+#define CTL_PATH_INITIALIZER(_proc, _ctl)	\
+	{ .procname = (_proc), }
+#else
+#define CTL_PATH_INITIALIZER(_proc, _ctl)	\
+	{ .procname = (_proc), .ctl_name = (_ctl), }
+#endif
+
 static int fakemac_register_netdev(struct net *net, struct net_device *dev)
 {
 	int err;
 	struct fakemac_ops_store *ops;
 	struct ctl_path ctl_path[] = {
-		{ .procname = "net", .ctl_name = CTL_NET, },
-		{ .procname = "fakemac", .ctl_name = CTL_UNNUMBERED, },
-		{ .procname = NULL, .ctl_name = 0 }
+		CTL_PATH_INITIALIZER("net", CTL_NET),
+		CTL_PATH_INITIALIZER("fakemac", CTL_UNNUMBERED),
+		CTL_PATH_INITIALIZER(NULL, 0),
 	};
 
 	dprintk(KERN_INFO "fakemac_register_netdev: adding %s...\n",
